@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="22"
+        android:translateY="22">
+        <!-- Play button triangle -->
+        <path
+            android:fillColor="#BB86FC"
+            android:pathData="M32,12L32,52L60,32Z" />
+        <!-- M3U text hint -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M10,42L10,22L14,22L14,38L22,22L26,22L26,42L22,42L22,26L14,42L10,42Z" />
+    </group>
+</vector>

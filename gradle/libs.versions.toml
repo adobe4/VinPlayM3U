@@ -1,22 +1,22 @@
 [versions]
-agp = "8.7.3"
-kotlin = "2.1.0"
-ksp = "2.1.0-1.0.29"
-hilt = "2.53.1"
+agp = "8.5.2"
+kotlin = "1.9.24"
+ksp = "1.9.24-1.0.20"
+hilt = "2.51.1"
 hiltNavigationCompose = "1.2.0"
-composeBom = "2024.12.01"
+composeBom = "2024.06.00"
 room = "2.6.1"
-lifecycle = "2.8.7"
-navigation = "2.8.5"
-media3 = "1.5.1"
+lifecycle = "2.8.2"
+navigation = "2.7.7"
+media3 = "1.3.1"
 okhttp = "4.12.0"
-coroutines = "1.9.0"
+coroutines = "1.8.1"
 datastore = "1.1.1"
-coreKtx = "1.15.0"
-activityCompose = "1.9.3"
-annotation = "1.9.1"
+coreKtx = "1.13.1"
+activityCompose = "1.9.0"
+annotation = "1.8.0"
 appcompat = "1.7.0"
-coil = "2.7.0"
+coil = "2.6.0"
 
 [libraries]
 # Core
@@ -83,3 +83,4 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }

@@ -1,19 +1,19 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kapt)
 }
 
 android {
     namespace = "com.vinplay.m3u"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.vinplay.m3u"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -41,6 +41,10 @@ android {
     buildFeatures {
         compose = true
     }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.15"
+    }
 }
 
 dependencies {
@@ -65,9 +69,9 @@ dependencies {
     // Navigation
     implementation(libs.navigation.compose)
 
-    // Hilt
+    // Hilt — using kapt instead of ksp for stability
     implementation(libs.hilt.android)
-    ksp(libs.hilt.android.compiler)
+    kapt(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
 
     // Room
@@ -95,4 +99,8 @@ dependencies {
 
     // Coil
     implementation(libs.coil.compose)
+}
+
+kapt {
+    correctErrorTypes = true
 }

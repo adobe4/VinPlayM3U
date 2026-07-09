@@ -9,7 +9,6 @@ import com.vinplay.m3u.data.model.TestStatus
 import com.vinplay.m3u.data.repository.ChannelRepository
 import com.vinplay.m3u.data.repository.PlaylistRepository
 import com.vinplay.m3u.network.LinkTester
-import com.vinplay.m3u.player.PlayerActivity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,7 +34,10 @@ data class ChannelsUiState(
     val groups: List<String> = emptyList(),
     val isTesting: Boolean = false,
     val testProgress: String = "",
-    val error: String? = null
+    val error: String? = null,
+    val editingChannel: ChannelEntity? = null,
+    val showMoveDialog: Boolean = false,
+    var moveTargetGroup: String = ""
 )
 
 sealed class ChannelsEvent {
@@ -155,84 +157,142 @@ class ChannelsViewModel @Inject constructor(
         }
     }
 
-    fun deleteChannel(channelId: Long) {
+    // ── Edit channel ──
+    fun startEdit(channel: ChannelEntity) {
+        _uiState.value = _uiState.value.copy(editingChannel = channel)
+    }
+
+    fun cancelEdit() {
+        _uiState.value = _uiState.value.copy(editingChannel = null)
+    }
+
+    fun saveEdit(name: String, url: String, groupTitle: String) {
+        val ch = _uiState.value.editingChannel ?: return
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                channelRepository.softDelete(channelId)
+                channelRepository.updateChannel(
+                    ch.copy(name = name, url = url, groupTitle = groupTitle)
+                )
             }
+            _uiState.value = _uiState.value.copy(editingChannel = null)
+            _events.emit(ChannelsEvent.ShowSnackbar("Channel updated"))
+            loadChannels(refresh = true)
+        }
+    }
+
+    // ── Delete ──
+    fun deleteChannel(channelId: Long) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { channelRepository.softDelete(channelId) }
             _events.emit(ChannelsEvent.ShowSnackbar("Channel moved to trash"))
             loadChannels(refresh = true)
         }
     }
 
-    fun deleteFilteredChannels() {
+    fun deleteFiltered() {
         viewModelScope.launch {
-            val state = _uiState.value
-            val toDelete = state.channels.map { it.id }
-            if (toDelete.isEmpty()) return@launch
-            withContext(Dispatchers.IO) {
-                channelRepository.softDeleteBatch(playlistId, toDelete)
-            }
-            _events.emit(ChannelsEvent.ShowSnackbar("${toDelete.size} channels deleted"))
+            val ids = _uiState.value.channels.map { it.id }
+            if (ids.isEmpty()) return@launch
+            withContext(Dispatchers.IO) { channelRepository.softDeleteBatch(playlistId, ids) }
+            _events.emit(ChannelsEvent.ShowSnackbar("${ids.size} channels deleted"))
             loadChannels(refresh = true)
+        }
+    }
+
+    // ── Move to group ──
+    fun showMoveDialog() {
+        _uiState.value = _uiState.value.copy(showMoveDialog = true, moveTargetGroup = "")
+    }
+
+    fun cancelMove() {
+        _uiState.value = _uiState.value.copy(showMoveDialog = false)
+    }
+
+    fun moveFilteredToGroup(newGroup: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                channelRepository.renameGroup(playlistId, _uiState.value.selectedGroup, newGroup)
+            }
+            _uiState.value = _uiState.value.copy(showMoveDialog = false)
+            _events.emit(ChannelsEvent.ShowSnackbar("Moved to group: $newGroup"))
+            loadChannels(refresh = true)
+        }
+    }
+
+    // ── Replace links ──
+    fun replaceLinks(searchTerm: String, replacement: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val all = channelRepository.getAllActiveChannels(playlistId)
+                all.filter { it.url.contains(searchTerm, ignoreCase = true) }.forEach { ch ->
+                    channelRepository.updateChannel(
+                        ch.copy(url = ch.url.replace(searchTerm, replacement, ignoreCase = true))
+                    )
+                }
+            }
+            _events.emit(ChannelsEvent.ShowSnackbar("Links replaced"))
+            loadChannels(refresh = true)
+        }
+    }
+
+    // ── Reorder ──
+    fun moveChannel(fromIndex: Int, toIndex: Int) {
+        val list = _uiState.value.channels.toMutableList()
+        if (fromIndex !in list.indices || toIndex !in list.indices) return
+        val item = list.removeAt(fromIndex)
+        list.add(toIndex, item)
+        _uiState.value = _uiState.value.copy(channels = list)
+
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                list.forEachIndexed { idx, ch ->
+                    channelRepository.updateOrder(ch.id, idx)
+                }
+            }
+        }
+    }
+
+    // ── Test links ──
+    fun testSingleChannel(channelId: Long, url: String) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { linkTester.testLinks(listOf(channelId to url)) }
+            result.firstOrNull()?.let { res ->
+                withContext(Dispatchers.IO) {
+                    channelRepository.updateTestStatus(res.channelId, res.status, res.statusCode)
+                }
+                _events.emit(ChannelsEvent.ShowSnackbar("Test: ${res.status.name}"))
+                loadChannels(refresh = true)
+            }
         }
     }
 
     fun testAllLinks() {
         testJob?.cancel()
         testJob = viewModelScope.launch {
-            val state = _uiState.value
-            _uiState.value = state.copy(isTesting = true, testProgress = "Testing links...")
-
+            _uiState.value = _uiState.value.copy(isTesting = true, testProgress = "Testing links...")
             val urls = withContext(Dispatchers.IO) {
-                channelRepository.getAllActiveChannels(playlistId)
-                    .map { it.id to it.url }
+                channelRepository.getAllActiveChannels(playlistId).map { it.id to it.url }
             }
-
             val batchSize = 50
             var tested = 0
-
             urls.chunked(batchSize).forEach { batch ->
                 val results = linkTester.testLinks(batch)
                 withContext(Dispatchers.IO) {
-                    results.forEach { result ->
-                        channelRepository.updateTestStatus(
-                            result.channelId, result.status, result.statusCode
-                        )
-                    }
+                    results.forEach { r -> channelRepository.updateTestStatus(r.channelId, r.status, r.statusCode) }
                 }
                 tested += batch.size
-                _uiState.value = _uiState.value.copy(
-                    testProgress = "Testing... $tested/${urls.size}"
-                )
+                _uiState.value = _uiState.value.copy(testProgress = "Testing... $tested/${urls.size}")
             }
-
-            _uiState.value = _uiState.value.copy(
-                isTesting = false,
-                testProgress = "Test complete: $tested links checked"
-            )
-            _events.emit(ChannelsEvent.ShowSnackbar("Test complete: $tested links checked"))
+            _uiState.value = _uiState.value.copy(isTesting = false, testProgress = "")
+            _events.emit(ChannelsEvent.ShowSnackbar("Tested $tested links"))
             loadChannels(refresh = true)
         }
     }
 
-    fun renameGroup(oldGroup: String, newGroup: String) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                channelRepository.renameGroup(playlistId, oldGroup, newGroup)
-            }
-            _events.emit(ChannelsEvent.ShowSnackbar("Group renamed"))
-            loadChannels(refresh = true)
-        }
-    }
-
+    // ── Play ──
     fun playChannel(url: String, name: String) {
-        viewModelScope.launch {
-            _events.emit(ChannelsEvent.PlayChannel(url, name))
-        }
+        viewModelScope.launch { _events.emit(ChannelsEvent.PlayChannel(url, name)) }
     }
 
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
-    }
+    fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
 }

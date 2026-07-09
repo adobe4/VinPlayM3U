@@ -45,6 +45,8 @@ class ChannelRepository @Inject constructor(
 
     suspend fun updateChannel(channel: ChannelEntity) = channelDao.update(channel)
 
+    suspend fun updateOrder(id: Long, orderIndex: Int) = channelDao.updateOrder(id, orderIndex)
+
     suspend fun softDelete(id: Long) = channelDao.softDelete(id)
 
     suspend fun softDeleteBatch(playlistId: Long, ids: List<Long>) =

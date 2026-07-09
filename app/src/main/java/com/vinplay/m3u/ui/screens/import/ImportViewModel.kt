@@ -1,16 +1,14 @@
 package com.vinplay.m3u.ui.screens.import
 
-import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.vinplay.m3u.data.model.ImportProgress
 import com.vinplay.m3u.data.parser.M3UParser
 import com.vinplay.m3u.data.repository.ChannelRepository
 import com.vinplay.m3u.data.repository.PlaylistRepository
+import com.vinplay.m3u.network.FileHelper
 import com.vinplay.m3u.network.M3UDownloader
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +28,7 @@ data class ImportUiState(
 
 @HiltViewModel
 class ImportViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val fileHelper: FileHelper,
     private val playlistRepository: PlaylistRepository,
     private val channelRepository: ChannelRepository,
     private val m3uDownloader: M3UDownloader
@@ -63,7 +61,7 @@ class ImportViewModel @Inject constructor(
             _uiState.value = ImportUiState(isImporting = true, progress = "Reading file...")
             try {
                 val stream = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)
+                    fileHelper.openInputStream(uri)
                 } ?: throw Exception("Cannot open file")
                 parseAndInsert(playlistId, stream)
             } catch (e: Exception) {
@@ -92,7 +90,6 @@ class ImportViewModel @Inject constructor(
     }
 
     fun importFromUrlAndMerge(playlistId: Long, url: String) {
-        // Same as importFromUrl — channels get appended to existing playlist
         importFromUrl(playlistId, url)
     }
 
@@ -112,7 +109,6 @@ class ImportViewModel @Inject constructor(
             }
         }
 
-        // Update playlist timestamp
         playlistRepository.touchPlaylist(playlistId)
 
         _uiState.value = ImportUiState(success = true, progress = "Import complete!")
